@@ -3,7 +3,8 @@ package core
 import "fmt"
 
 type ConditionCodes struct {
-	Z, S, P, CY, AC, PAD uint8
+	Z, S, P, CY, AC bool
+	PAD             uint8
 }
 type State8080 struct {
 	A, B, C, D, E, H, L uint8
@@ -22,7 +23,19 @@ func (s *State8080) InitWithData(data []byte) {
 		s.Memory[idx] = d
 	}
 }
+func parity(x, size uint8) bool {
+	var i uint8
+	p := 0
+	x = (x & ((1 << size) - 1))
+	for i = 0; i < size; i++ {
+		if (x & 0x1) != 0 {
+			p++
+		}
+		x = x >> 1
+	}
+	return (0 == (p & 0x1))
 
+}
 func (s *State8080) Emulate8080Op() {
 	opcode := s.Memory[s.PC]
 	data := s.Memory[s.PC+1 : s.PC+3]
@@ -41,7 +54,11 @@ func (s *State8080) Emulate8080Op() {
 	case 0x04:
 		s.UnimplementedInstruction(opcode)
 	case 0x05:
-		s.UnimplementedInstruction(opcode)
+		res := s.B - 1
+		s.ConditionCodes.Z = res == 0
+		s.ConditionCodes.S = 0x80 == (res & 0x80)
+		s.ConditionCodes.P = parity(res, 8)
+		s.B = res
 	case 0x06:
 		s.B = s.Memory[s.PC]
 		s.PC++
@@ -72,7 +89,10 @@ func (s *State8080) Emulate8080Op() {
 	case 0x12:
 		s.UnimplementedInstruction(opcode)
 	case 0x13:
-		s.UnimplementedInstruction(opcode)
+		s.E++
+		if s.E == 0 {
+			s.D++
+		}
 	case 0x14:
 		s.UnimplementedInstruction(opcode)
 	case 0x15:
@@ -86,7 +106,8 @@ func (s *State8080) Emulate8080Op() {
 	case 0x19:
 		s.UnimplementedInstruction(opcode)
 	case 0x1a:
-		s.UnimplementedInstruction(opcode)
+		offset := (uint16(s.D) << 8) | uint16(s.E)
+		s.A = s.Memory[offset]
 	case 0x1b:
 		s.UnimplementedInstruction(opcode)
 	case 0x1c:
@@ -106,7 +127,10 @@ func (s *State8080) Emulate8080Op() {
 	case 0x22:
 		s.UnimplementedInstruction(opcode)
 	case 0x23:
-		s.UnimplementedInstruction(opcode)
+		s.L++
+		if s.L == 0 {
+			s.H++
+		}
 	case 0x24:
 		s.UnimplementedInstruction(opcode)
 	case 0x25:
@@ -145,7 +169,9 @@ func (s *State8080) Emulate8080Op() {
 	case 0x35:
 		s.UnimplementedInstruction(opcode)
 	case 0x36:
-		s.UnimplementedInstruction(opcode)
+		offset := (uint16(s.H) << 8) | uint16(s.L)
+		s.Memory[offset] = data[0]
+		s.PC++
 	case 0x37:
 		s.UnimplementedInstruction(opcode)
 	case 0x38:
@@ -275,7 +301,9 @@ func (s *State8080) Emulate8080Op() {
 	case 0x76:
 		s.UnimplementedInstruction(opcode)
 	case 0x77:
-		s.UnimplementedInstruction(opcode)
+		offset := (uint16(s.H) << 8) | uint16(s.L)
+		s.Memory[offset] = s.A
+
 	case 0x78:
 		s.UnimplementedInstruction(opcode)
 	case 0x79:
@@ -285,7 +313,7 @@ func (s *State8080) Emulate8080Op() {
 	case 0x7b:
 		s.UnimplementedInstruction(opcode)
 	case 0x7c:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.H
 	case 0x7d:
 		s.UnimplementedInstruction(opcode)
 	case 0x7e:
@@ -425,9 +453,12 @@ func (s *State8080) Emulate8080Op() {
 	case 0xc1:
 		s.UnimplementedInstruction(opcode)
 	case 0xc2:
-		s.UnimplementedInstruction(opcode)
+		if !s.ConditionCodes.Z {
+			s.PC = (uint16(data[1]) << 8) | uint16(data[0])
+		} else {
+			s.PC += 2
+		}
 	case 0xc3:
-
 		s.PC = (uint16(data[1]) << 8) | uint16(data[0])
 	case 0xc4:
 		s.UnimplementedInstruction(opcode)
@@ -440,7 +471,8 @@ func (s *State8080) Emulate8080Op() {
 	case 0xc8:
 		s.UnimplementedInstruction(opcode)
 	case 0xc9:
-		s.UnimplementedInstruction(opcode)
+		s.PC = uint16(s.Memory[s.SP]) | (uint16(s.Memory[s.SP+1]) << 8)
+		s.SP += 2
 	case 0xca:
 		s.UnimplementedInstruction(opcode)
 	case 0xcb:
@@ -448,7 +480,7 @@ func (s *State8080) Emulate8080Op() {
 	case 0xcc:
 		s.UnimplementedInstruction(opcode)
 	case 0xcd:
-		var ret uint16 = s.PC + 2
+		ret := s.PC + 2
 		s.Memory[s.SP-1] = uint8((ret >> 8) & 0xFF)
 		s.Memory[s.SP-2] = uint8((ret & 0xFF))
 		s.SP = s.SP - 2
@@ -551,7 +583,12 @@ func (s *State8080) Emulate8080Op() {
 	case 0xfd:
 		s.UnimplementedInstruction(opcode)
 	case 0xfe:
-		s.UnimplementedInstruction(opcode)
+		x := s.A - data[0]
+		s.ConditionCodes.Z = (x == 0)
+		s.ConditionCodes.S = (0x80 == (x & 0x80))
+		s.ConditionCodes.P = parity(x, 8)
+		s.ConditionCodes.CY = (s.A < data[0])
+		s.PC++
 	case 0xff:
 		s.UnimplementedInstruction(opcode)
 	default:
