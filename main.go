@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"os"
+	"strconv"
 
 	core "github.com/DigNZ/goinvaders/core"
 )
@@ -48,11 +49,16 @@ func main() {
 		}
 	} else {
 		s := core.State8080{}
-		s.InitWithData(buffer)
-		s.PC = 0
-		for {
-			s.Emulate8080Op()
+		if len(os.Args) > 2 {
+			addr, err := strconv.ParseInt(os.Args[2], 16, 16)
+			if err != nil {
+				panic(err)
+			}
+			s.InitWithDataAt(buffer, int(addr))
+		} else {
+			s.InitWithData(buffer)
 		}
+		s.Run()
 	}
 
 }

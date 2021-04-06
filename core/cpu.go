@@ -1,6 +1,13 @@
 package core
 
-import "fmt"
+import (
+	"fmt"
+	"log"
+	"os"
+	"time"
+
+	io "github.com/DigNZ/goinvaders/io"
+)
 
 type ConditionCodes struct {
 	Z, S, P, CY, AC bool
@@ -23,7 +30,22 @@ func (s *State8080) InitWithData(data []byte) {
 		s.Memory[idx] = d
 	}
 }
+func (s *State8080) InitWithDataAt(data []byte, addr int) {
+	for idx, d := range data {
+		s.Memory[idx+addr] = d
+	}
+	s.PC = uint16(addr)
+
+	//cpudiag hacks
+	s.Memory[368] = 0x7
+
+	//Skip DAA test
+	s.Memory[0x59c] = 0xc3 //JMP
+	s.Memory[0x59d] = 0xc2
+	s.Memory[0x59e] = 0x05
+}
 func parity(x, size uint8) bool {
+
 	var i uint8
 	p := 0
 	x = (x & ((1 << size) - 1))
@@ -36,6 +58,7 @@ func parity(x, size uint8) bool {
 	return (0 == (p & 0x1))
 }
 func (s *State8080) logicFlagsA() {
+
 	s.ConditionCodes.CY = false
 	s.ConditionCodes.AC = false
 	s.ConditionCodes.Z = s.A == 0
@@ -43,10 +66,80 @@ func (s *State8080) logicFlagsA() {
 	s.ConditionCodes.P = parity(s.A, 8)
 }
 
-func (s *State8080) Emulate8080Op() {
+func (s *State8080) flagsZSP(value uint8) {
+	s.ConditionCodes.Z = value == 0
+	s.ConditionCodes.S = (0x80 == (value & 0x80))
+	s.ConditionCodes.P = parity(value, 8)
+}
+
+func (s *State8080) writeMem(address uint16, value uint8) {
+	if address < 0x2000 {
+		//	log.Fatalf("Attempted to write to ROM %x", address)
+		return
+	}
+	if address >= 0x4000 {
+		log.Fatalf("Attempted to write outside RAM")
+	}
+	s.Memory[address] = value
+}
+func (s *State8080) push(high, low uint8) {
+	s.writeMem(s.SP-1, high)
+	s.writeMem(s.SP-2, low)
+
+	s.SP = s.SP - 2
+}
+
+func (s *State8080) readFromHL() uint8 {
+	offset := uint16(s.H)<<8 | uint16(s.L)
+	return s.Memory[offset]
+}
+
+func (s *State8080) generateInterrupt(interrupt_num uint16) {
+	//perform "PUSH PC"
+	s.push(uint8((s.PC&0xFF00)>>8), uint8(s.PC&0xff))
+
+	//Set the PC to the low memory vector.
+	//This is identical to an "RST interrupt_num" instruction.
+	s.PC = 8 * interrupt_num
+}
+func (s *State8080) Run() {
+	m := io.Machine{}
+	var lastInterrupt time.Time
+	for {
+		opcode := s.Memory[s.PC]
+		if opcode == 0xdb {
+			fmt.Print("0XDB")
+			port := s.Memory[s.PC+1]
+			s.A = m.MachineIN(port)
+			s.PC += 2
+		} else if opcode == 0xd3 {
+			port := s.Memory[s.PC+1]
+			m.MachineOUT(port)
+			s.PC += 2
+		} else {
+			s.Emulate8080Op(true)
+		}
+		if (time.Now().Nanosecond())-lastInterrupt.Nanosecond() > 16666666 { //1/60 second has elapsed
+			//only do an interrupt if they are enabled
+			if s.IntEnable == 1 {
+				s.generateInterrupt(2) //interrupt 2
+
+				//Save the time we did this
+				lastInterrupt = time.Now()
+			}
+		}
+
+	}
+}
+func (s *State8080) Emulate8080Op(dasm bool) {
 	opcode := s.Memory[s.PC]
-	data := s.Memory[s.PC+1 : s.PC+3]
-	Disassemble8080Op(s.Memory[:], s.PC)
+	var data []uint8
+	if s.PC+3 > s.PC+1 {
+		data = s.Memory[s.PC+1 : s.PC+3]
+	}
+	if dasm {
+		Disassemble8080Op(s.Memory[:], s.PC)
+	}
 	//Remember that we've advanced the PC BEFORE executing the opcode.
 	s.PC += 1
 	switch opcode {
@@ -63,11 +156,8 @@ func (s *State8080) Emulate8080Op() {
 	case 0x04:
 		s.UnimplementedInstruction(opcode)
 	case 0x05:
-		res := s.B - 1
-		s.ConditionCodes.Z = res == 0
-		s.ConditionCodes.S = 0x80 == (res & 0x80)
-		s.ConditionCodes.P = parity(res, 8)
-		s.B = res
+		s.B -= 1
+		s.flagsZSP(s.B)
 	case 0x06:
 		s.B = s.Memory[s.PC]
 		s.PC++
@@ -233,7 +323,7 @@ func (s *State8080) Emulate8080Op() {
 	case 0x42:
 		s.UnimplementedInstruction(opcode)
 	case 0x43:
-		s.UnimplementedInstruction(opcode)
+		s.B = s.E
 	case 0x44:
 		s.UnimplementedInstruction(opcode)
 	case 0x45:
@@ -253,19 +343,19 @@ func (s *State8080) Emulate8080Op() {
 	case 0x4c:
 		s.UnimplementedInstruction(opcode)
 	case 0x4d:
-		s.UnimplementedInstruction(opcode)
+		s.C = s.L
 	case 0x4e:
 		s.UnimplementedInstruction(opcode)
 	case 0x4f:
-		s.UnimplementedInstruction(opcode)
+		s.C = s.A
 	case 0x50:
 		s.UnimplementedInstruction(opcode)
 	case 0x51:
 		s.UnimplementedInstruction(opcode)
 	case 0x52:
-		s.UnimplementedInstruction(opcode)
+		s.D = s.D
 	case 0x53:
-		s.UnimplementedInstruction(opcode)
+		s.D = s.E
 	case 0x54:
 		s.UnimplementedInstruction(opcode)
 	case 0x55:
@@ -291,7 +381,7 @@ func (s *State8080) Emulate8080Op() {
 		offset := (uint16(s.H) << 8) | uint16(s.L)
 		s.E = s.Memory[offset]
 	case 0x5f:
-		s.UnimplementedInstruction(opcode)
+		s.E = s.A
 	case 0x60:
 		s.UnimplementedInstruction(opcode)
 	case 0x61:
@@ -342,7 +432,6 @@ func (s *State8080) Emulate8080Op() {
 	case 0x77:
 		offset := (uint16(s.H) << 8) | uint16(s.L)
 		s.Memory[offset] = s.A
-
 	case 0x78:
 		s.UnimplementedInstruction(opcode)
 	case 0x79:
@@ -354,7 +443,7 @@ func (s *State8080) Emulate8080Op() {
 	case 0x7c:
 		s.A = s.H
 	case 0x7d:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.L
 	case 0x7e:
 		offset := (uint16(s.H) << 8) | uint16(s.L)
 		s.A = s.Memory[offset]
@@ -425,55 +514,77 @@ func (s *State8080) Emulate8080Op() {
 	case 0x9f:
 		s.UnimplementedInstruction(opcode)
 	case 0xa0:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A & s.B
+		s.logicFlagsA()
 	case 0xa1:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A & s.C
+		s.logicFlagsA()
 	case 0xa2:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A & s.D
+		s.logicFlagsA()
 	case 0xa3:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A & s.E
+		s.logicFlagsA()
 	case 0xa4:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A & s.H
+		s.logicFlagsA()
 	case 0xa5:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A & s.L
+		s.logicFlagsA()
 	case 0xa6:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A & s.readFromHL()
+		s.logicFlagsA()
 	case 0xa7:
 		s.A = s.A & s.A
 		s.logicFlagsA()
 	case 0xa8:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A ^ s.B
+		s.logicFlagsA()
 	case 0xa9:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A ^ s.C
+		s.logicFlagsA()
 	case 0xaa:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A ^ s.D
+		s.logicFlagsA()
 	case 0xab:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A ^ s.E
+		s.logicFlagsA()
 	case 0xac:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A ^ s.H
+		s.logicFlagsA()
 	case 0xad:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A ^ s.L
+		s.logicFlagsA()
 	case 0xae:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A ^ s.readFromHL()
+		s.logicFlagsA()
 	case 0xaf:
 		s.A = s.A ^ s.A
 		s.logicFlagsA()
 	case 0xb0:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A | s.B
+		s.logicFlagsA()
 	case 0xb1:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A | s.C
+		s.logicFlagsA()
 	case 0xb2:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A | s.D
+		s.logicFlagsA()
 	case 0xb3:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A | s.E
+		s.logicFlagsA()
 	case 0xb4:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A | s.H
+		s.logicFlagsA()
 	case 0xb5:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A | s.L
+		s.logicFlagsA()
 	case 0xb6:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A | s.readFromHL()
+		s.logicFlagsA()
 	case 0xb7:
-		s.UnimplementedInstruction(opcode)
+		s.A = s.A | s.A
+		s.logicFlagsA()
 	case 0xb8:
 		s.UnimplementedInstruction(opcode)
 	case 0xb9:
@@ -527,20 +638,55 @@ func (s *State8080) Emulate8080Op() {
 		s.PC = uint16(s.Memory[s.SP]) | (uint16(s.Memory[s.SP+1]) << 8)
 		s.SP += 2
 	case 0xca:
-		s.UnimplementedInstruction(opcode)
+		if s.ConditionCodes.Z {
+			s.PC = uint16(data[1])<<8 | uint16(data[0])
+		} else {
+			s.PC += 2
+		}
 	case 0xcb:
 		s.UnimplementedInstruction(opcode)
 	case 0xcc:
 		s.UnimplementedInstruction(opcode)
 	case 0xcd:
-		ret := s.PC + 2
-		s.Memory[s.SP-1] = uint8((ret >> 8) & 0xFF)
-		s.Memory[s.SP-2] = uint8((ret & 0xFF))
-		s.SP = s.SP - 2
-		s.PC = (uint16(data[1])<<8 | uint16(data[0]))
+		if 5 == uint16(data[1])<<8|uint16(data[0]) {
+			if s.C == 9 {
+				offset := uint16(s.D)<<8 | uint16(s.E)
+				var idx uint16 = 3
+				str := s.Memory[offset+3]
+				for {
+					if str == '$' {
+						fmt.Println("")
+						os.Exit(0)
+						break
+					}
+					fmt.Printf("%c", str)
+					idx++
+					str = s.Memory[offset+idx]
+				}
+
+			} else if s.C == 2 {
+				fmt.Println("This got called")
+			}
+		} else if 0 == uint16(data[1])<<8|uint16(data[0]) {
+			os.Exit(0)
+		} else {
+			ret := s.PC + 2
+			s.Memory[s.SP-1] = uint8((ret >> 8) & 0xFF)
+			s.Memory[s.SP-2] = uint8((ret & 0xFF))
+			s.SP = s.SP - 2
+			s.PC = (uint16(data[1])<<8 | uint16(data[0]))
+		}
 
 	case 0xce:
-		s.UnimplementedInstruction(opcode)
+		x := uint16(s.A + data[0])
+		if s.ConditionCodes.CY {
+			x += 1
+		}
+		s.flagsZSP(uint8(x & 0xff))
+
+		s.ConditionCodes.CY = (x > 0xff)
+		s.A = uint8(x & 0xff)
+		s.PC++
 	case 0xcf:
 		s.UnimplementedInstruction(opcode)
 	case 0xd0:
@@ -550,7 +696,11 @@ func (s *State8080) Emulate8080Op() {
 		s.D = s.Memory[s.SP+1]
 		s.SP += 2
 	case 0xd2:
-		s.UnimplementedInstruction(opcode)
+		if !s.ConditionCodes.CY {
+			s.PC = uint16(data[1])<<8 | uint16(data[0])
+		} else {
+			s.PC += 2
+		}
 	case 0xd3:
 		//Special?
 		s.PC++
@@ -561,7 +711,11 @@ func (s *State8080) Emulate8080Op() {
 		s.Memory[s.SP-2] = s.E
 		s.SP -= 2
 	case 0xd6:
-		s.UnimplementedInstruction(opcode)
+		x := s.A - data[0]
+		s.flagsZSP(x & 0xff)
+		s.ConditionCodes.CY = (s.A < data[0])
+		s.A = x
+		s.PC++
 	case 0xd7:
 		s.UnimplementedInstruction(opcode)
 	case 0xd8:
@@ -569,7 +723,11 @@ func (s *State8080) Emulate8080Op() {
 	case 0xd9:
 		s.UnimplementedInstruction(opcode)
 	case 0xda:
-		s.UnimplementedInstruction(opcode)
+		if s.ConditionCodes.CY {
+			s.PC = uint16(data[1])<<8 | uint16(data[0])
+		} else {
+			s.PC += 2
+		}
 	case 0xdb:
 		s.UnimplementedInstruction(opcode)
 	case 0xdc:
@@ -577,7 +735,15 @@ func (s *State8080) Emulate8080Op() {
 	case 0xdd:
 		s.UnimplementedInstruction(opcode)
 	case 0xde:
-		s.UnimplementedInstruction(opcode)
+		var x uint16 = uint16(s.A) - uint16(data[0])
+		if s.ConditionCodes.CY {
+			x -= 1
+		}
+		s.flagsZSP(uint8(x & 0xff))
+		s.ConditionCodes.CY = (x > 0xff)
+		s.A = uint8(x & 0xFF)
+		s.PC++
+
 	case 0xdf:
 		s.UnimplementedInstruction(opcode)
 	case 0xe0:
@@ -587,9 +753,19 @@ func (s *State8080) Emulate8080Op() {
 		s.H = s.Memory[s.SP+1]
 		s.SP += 2
 	case 0xe2:
-		s.UnimplementedInstruction(opcode)
+		if !s.ConditionCodes.P {
+			s.PC = uint16(data[1])<<8 | uint16(data[0])
+		} else {
+			s.PC += 2
+		}
 	case 0xe3:
-		s.UnimplementedInstruction(opcode)
+		h := s.H
+		l := s.L
+		s.L = s.Memory[s.SP]
+		s.H = s.Memory[s.SP+1]
+		s.writeMem(s.SP, l)
+		s.writeMem(s.SP+1, h)
+
 	case 0xe4:
 		s.UnimplementedInstruction(opcode)
 	case 0xe5:
@@ -607,7 +783,11 @@ func (s *State8080) Emulate8080Op() {
 	case 0xe9:
 		s.UnimplementedInstruction(opcode)
 	case 0xea:
-		s.UnimplementedInstruction(opcode)
+		if s.ConditionCodes.P {
+			s.PC = uint16(data[1])<<8 | uint16(data[0])
+		} else {
+			s.PC += 2
+		}
 	case 0xeb:
 		save1 := s.D
 		save2 := s.E
@@ -620,7 +800,11 @@ func (s *State8080) Emulate8080Op() {
 	case 0xed:
 		s.UnimplementedInstruction(opcode)
 	case 0xee:
-		s.UnimplementedInstruction(opcode)
+		x := s.A ^ data[0]
+		s.flagsZSP(x)
+		s.ConditionCodes.CY = false
+		s.A = x
+		s.PC++
 	case 0xef:
 		s.UnimplementedInstruction(opcode)
 	case 0xf0:
@@ -630,14 +814,23 @@ func (s *State8080) Emulate8080Op() {
 		s.A = s.Memory[s.SP+1]
 		psw := s.Memory[s.SP]
 
-		s.ConditionCodes.Z = (0x01 == (psw & 0x01))
+		s.ConditionCodes.S = ((psw >> 7) & 1) == 1
+		s.ConditionCodes.Z = ((psw >> 6) & 1) == 1
+		s.ConditionCodes.AC = ((psw >> 4) & 1) == 1
+		s.ConditionCodes.P = ((psw >> 2) & 1) == 1
+		s.ConditionCodes.CY = ((psw >> 0) & 1) == 1
+		/*s.ConditionCodes.Z = (0x01 == (psw & 0x01))
 		s.ConditionCodes.S = (0x02 == (psw & 0x02))
 		s.ConditionCodes.P = (0x04 == (psw & 0x04))
 		s.ConditionCodes.CY = (0x05 == (psw & 0x08))
-		s.ConditionCodes.AC = (0x10 == (psw & 0x10))
+		s.ConditionCodes.AC = (0x10 == (psw & 0x10))*/
 		s.SP += 2
 	case 0xf2:
-		s.UnimplementedInstruction(opcode)
+		if !s.ConditionCodes.S {
+			s.PC = uint16(data[1])<<8 | uint16(data[0])
+		} else {
+			s.PC += 2
+		}
 	case 0xf3:
 		s.UnimplementedInstruction(opcode)
 	case 0xf4:
@@ -660,13 +853,24 @@ func (s *State8080) Emulate8080Op() {
 		if s.ConditionCodes.AC {
 			ac = 1
 		}
-		psw := z | s1<<1 | p<<2 | cy<<3 | ac<<4
+		var psw uint8 = 0
+		psw |= s1 << 7
+		psw |= z << 6
+		psw |= ac << 4
+		psw |= p << 2
+		psw |= 1 << 1 // bit 1 is always 1
+		psw |= cy << 0
 
 		s.Memory[s.SP-2] = uint8(psw)
 		s.SP -= 2
 
 	case 0xf6:
-		s.UnimplementedInstruction(opcode)
+		x := s.A | data[0]
+		s.flagsZSP(x)
+		s.ConditionCodes.CY = false
+		s.A = x
+		s.PC++
+
 	case 0xf7:
 		s.UnimplementedInstruction(opcode)
 	case 0xf8:
@@ -674,7 +878,11 @@ func (s *State8080) Emulate8080Op() {
 	case 0xf9:
 		s.UnimplementedInstruction(opcode)
 	case 0xfa:
-		s.UnimplementedInstruction(opcode)
+		if s.ConditionCodes.S {
+			s.PC = uint16(data[1])<<8 | uint16(data[0])
+		} else {
+			s.PC += 2
+		}
 	case 0xfb:
 		s.IntEnable = 1
 	case 0xfc:

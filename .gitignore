@@ -3,3 +3,5 @@ rom/invaders.f
 rom/invaders.g
 rom/invaders.h
 rom/invaders
+go.sum
+.gitignore
