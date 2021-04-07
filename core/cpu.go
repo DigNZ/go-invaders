@@ -68,7 +68,7 @@ func (s *State8080) logicFlagsA() {
 
 func (s *State8080) arithFlagsA(res uint16) {
 
-	s.ConditionCodes.CY = res > 0xFF
+	s.ConditionCodes.CY = (res > 0xFF)
 	s.ConditionCodes.Z = ((res & 0xff) == 0)
 	s.ConditionCodes.S = (0x80 == (res & 0x80))
 	s.ConditionCodes.P = parity(uint8(res&0xff), 8)
@@ -718,21 +718,29 @@ func (s *State8080) Emulate8080Op(dasm bool) {
 		s.A = s.A | s.A
 		s.logicFlagsA()
 	case 0xb8:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.B)
+		s.arithFlagsA(res)
 	case 0xb9:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.C)
+		s.arithFlagsA(res)
 	case 0xba:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.D)
+		s.arithFlagsA(res)
 	case 0xbb:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.E)
+		s.arithFlagsA(res)
 	case 0xbc:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.H)
+		s.arithFlagsA(res)
 	case 0xbd:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.L)
+		s.arithFlagsA(res)
 	case 0xbe:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.readFromHL())
+		s.arithFlagsA(res)
 	case 0xbf:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.A)
+		s.arithFlagsA(res)
 	case 0xc0:
 		if !s.ConditionCodes.Z {
 			s.PC = uint16(s.Memory[s.SP]) | uint16(s.Memory[s.SP+1])<<8
