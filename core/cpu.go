@@ -66,6 +66,15 @@ func (s *State8080) logicFlagsA() {
 	s.ConditionCodes.P = parity(s.A, 8)
 }
 
+func (s *State8080) arithFlagsA(res uint16) {
+
+	s.ConditionCodes.CY = res > 0xFF
+	s.ConditionCodes.Z = ((res & 0xff) == 0)
+	s.ConditionCodes.S = (0x80 == (res & 0x80))
+	s.ConditionCodes.P = parity(uint8(res&0xff), 8)
+
+}
+
 func (s *State8080) flagsZSP(value uint8) {
 	s.ConditionCodes.Z = value == 0
 	s.ConditionCodes.S = (0x80 == (value & 0x80))
@@ -88,7 +97,10 @@ func (s *State8080) push(high, low uint8) {
 
 	s.SP = s.SP - 2
 }
-
+func (s *State8080) writeToHL(value uint8) {
+	var offset uint16 = (uint16(s.H) << 8) | uint16(s.L)
+	s.writeMem(offset, value)
+}
 func (s *State8080) readFromHL() uint8 {
 	offset := uint16(s.H)<<8 | uint16(s.L)
 	return s.Memory[offset]
@@ -425,22 +437,21 @@ func (s *State8080) Emulate8080Op(dasm bool) {
 	case 0x6f:
 		s.L = s.A
 	case 0x70:
-		s.UnimplementedInstruction(opcode)
+		s.writeToHL(s.B)
 	case 0x71:
-		s.UnimplementedInstruction(opcode)
+		s.writeToHL(s.C)
 	case 0x72:
-		s.UnimplementedInstruction(opcode)
+		s.writeToHL(s.D)
 	case 0x73:
-		s.UnimplementedInstruction(opcode)
+		s.writeToHL(s.E)
 	case 0x74:
-		s.UnimplementedInstruction(opcode)
+		s.writeToHL(s.H)
 	case 0x75:
-		s.UnimplementedInstruction(opcode)
+		s.writeToHL(s.L)
 	case 0x76:
-		s.UnimplementedInstruction(opcode)
+		s.writeToHL(s.readFromHL())
 	case 0x77:
-		offset := (uint16(s.H) << 8) | uint16(s.L)
-		s.Memory[offset] = s.A
+		s.writeToHL(s.A)
 	case 0x78:
 		s.A = s.B
 	case 0x79:
@@ -458,69 +469,182 @@ func (s *State8080) Emulate8080Op(dasm bool) {
 	case 0x7f:
 		s.A = s.A
 	case 0x80:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) + uint16(s.B)
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
+
 	case 0x81:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) + uint16(s.C)
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x82:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) + uint16(s.D)
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x83:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) + uint16(s.E)
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x84:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) + uint16(s.H)
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x85:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) + uint16(s.L)
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x86:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) + uint16(s.readFromHL())
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x87:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) + uint16(s.A)
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x88:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) + uint16(s.B)
+		if s.ConditionCodes.CY {
+			res += 1
+		}
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x89:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) + uint16(s.C)
+		if s.ConditionCodes.CY {
+			res += 1
+		}
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x8a:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) + uint16(s.D)
+		if s.ConditionCodes.CY {
+			res += 1
+		}
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x8b:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) + uint16(s.E)
+		if s.ConditionCodes.CY {
+			res += 1
+		}
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x8c:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) + uint16(s.H)
+		if s.ConditionCodes.CY {
+			res += 1
+		}
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x8d:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) + uint16(s.L)
+		if s.ConditionCodes.CY {
+			res += 1
+		}
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x8e:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) + uint16(s.readFromHL())
+		if s.ConditionCodes.CY {
+			res += 1
+		}
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x8f:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) + uint16(s.A)
+		if s.ConditionCodes.CY {
+			res += 1
+		}
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x90:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.B)
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x91:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.C)
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x92:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.D)
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x93:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.E)
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x94:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.H)
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x95:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.L)
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x96:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.readFromHL())
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x97:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.A)
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x98:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.B)
+		if s.ConditionCodes.CY {
+			res -= 1
+		}
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x99:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.C)
+		if s.ConditionCodes.CY {
+			res -= 1
+		}
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x9a:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.D)
+		if s.ConditionCodes.CY {
+			res -= 1
+		}
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x9b:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.E)
+		if s.ConditionCodes.CY {
+			res -= 1
+		}
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x9c:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.H)
+		if s.ConditionCodes.CY {
+			res -= 1
+		}
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x9d:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.L)
+		if s.ConditionCodes.CY {
+			res -= 1
+		}
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x9e:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.readFromHL())
+		if s.ConditionCodes.CY {
+			res -= 1
+		}
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0x9f:
-		s.UnimplementedInstruction(opcode)
+		var res uint16 = uint16(s.A) - uint16(s.A)
+		if s.ConditionCodes.CY {
+			res -= 1
+		}
+		s.arithFlagsA(res)
+		s.A = uint8(res & 0xff)
 	case 0xa0:
 		s.A = s.A & s.B
 		s.logicFlagsA()
