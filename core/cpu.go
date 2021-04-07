@@ -829,7 +829,11 @@ func (s *State8080) Emulate8080Op(dasm bool) {
 		s.A = uint8(x)
 		s.PC++
 	case 0xc7:
-		s.UnimplementedInstruction(opcode)
+		ret := s.PC + 2
+		s.writeMem(s.SP-1, uint8((ret>>8)&0xff))
+		s.writeMem(s.SP-2, uint8(ret&0xff))
+		s.SP = s.SP - 2
+		s.PC = 0x0000
 	case 0xc8:
 		if s.ConditionCodes.Z {
 			s.PC = uint16(s.Memory[s.SP]) | uint16(s.Memory[s.SP+1])<<8
