@@ -387,7 +387,7 @@ func (s *State8080) Emulate8080Op(dasm bool) {
 	case 0x3f:
 		s.ConditionCodes.CY = !s.ConditionCodes.CY
 	case 0x40:
-		s.B = s.B
+		break //s.B = s.B
 	case 0x41:
 		s.B = s.C
 	case 0x42:
@@ -405,7 +405,7 @@ func (s *State8080) Emulate8080Op(dasm bool) {
 	case 0x48:
 		s.C = s.B
 	case 0x49:
-		s.C = s.C
+		break //s.C = s.C
 	case 0x4a:
 		s.C = s.D
 	case 0x4b:
@@ -423,7 +423,7 @@ func (s *State8080) Emulate8080Op(dasm bool) {
 	case 0x51:
 		s.D = s.C
 	case 0x52:
-		s.D = s.D
+		break //s.D = s.D
 	case 0x53:
 		s.D = s.E
 	case 0x54:
@@ -441,7 +441,7 @@ func (s *State8080) Emulate8080Op(dasm bool) {
 	case 0x5a:
 		s.E = s.D
 	case 0x5b:
-		s.E = s.E
+		break //s.E = s.E
 	case 0x5c:
 		s.E = s.H
 	case 0x5d:
@@ -459,7 +459,7 @@ func (s *State8080) Emulate8080Op(dasm bool) {
 	case 0x63:
 		s.H = s.E
 	case 0x64:
-		s.H = s.H
+		break //s.H = s.H
 	case 0x65:
 		s.H = s.L
 	case 0x66:
@@ -477,7 +477,7 @@ func (s *State8080) Emulate8080Op(dasm bool) {
 	case 0x6c:
 		s.L = s.H
 	case 0x6d:
-		s.L = s.L
+		break //s.L = s.L
 	case 0x6e:
 		s.L = s.readFromHL()
 	case 0x6f:
@@ -513,7 +513,7 @@ func (s *State8080) Emulate8080Op(dasm bool) {
 	case 0x7e:
 		s.A = s.readFromHL()
 	case 0x7f:
-		s.A = s.A
+		break //s.A = s.A
 	case 0x80:
 		var res uint16 = uint16(s.A) + uint16(s.B)
 		s.arithFlagsA(res)
