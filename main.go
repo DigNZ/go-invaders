@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	core "github.com/DigNZ/goinvaders/core"
+	"github.com/DigNZ/goinvaders/system"
 )
 
 func RetrieveROM(filename string) ([]byte, error) {
@@ -58,7 +59,8 @@ func main() {
 		} else {
 			s.InitWithData(buffer)
 		}
-		s.Run()
+		system := system.System{Cpu: &s}
+		system.Start()
 	}
 
 }

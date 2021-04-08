@@ -18,6 +18,8 @@ type State8080 struct {
 	Memory              [0x10000]uint8
 	ConditionCodes      ConditionCodes
 	IntEnable           uint8
+	Machine             io.Machine
+	lastInterrupt       time.Time
 }
 
 func (s *State8080) UnimplementedInstruction(opcode byte) {
@@ -113,33 +115,38 @@ func (s *State8080) generateInterrupt(interrupt_num uint16) {
 	//This is identical to an "RST interrupt_num" instruction.
 	s.PC = 8 * interrupt_num
 }
+func (s *State8080) Init() {
+	s.Machine = io.Machine{}
+	s.lastInterrupt = time.Now()
+}
+func (s *State8080) Step() {
+	opcode := s.Memory[s.PC]
+	if opcode == 0xdb {
+		port := s.Memory[s.PC+1]
+		s.A = s.Machine.MachineIN(port)
+		s.PC += 2
+	} else if opcode == 0xd3 {
+		port := s.Memory[s.PC+1]
+		s.Machine.MachineOUT(port, s.A)
+		s.PC += 2
+	} else {
+		s.Emulate8080Op(false)
+	}
+	if (time.Now().Nanosecond())-s.lastInterrupt.Nanosecond() > 16666666 { //1/60 second has elapsed
+		//only do an interrupt if they are enabled
+		if s.IntEnable == 1 {
+			fmt.Println("Interrupt")
+			s.generateInterrupt(2) //interrupt 2
+
+			//Save the time we did this
+			s.lastInterrupt = time.Now()
+		}
+	}
+}
 func (s *State8080) Run() {
-	m := io.Machine{}
-	var lastInterrupt time.Time
+
 	for {
-		opcode := s.Memory[s.PC]
-		if opcode == 0xdb {
-			fmt.Print("0XDB")
-			port := s.Memory[s.PC+1]
-			s.A = m.MachineIN(port)
-			s.PC += 2
-		} else if opcode == 0xd3 {
-			port := s.Memory[s.PC+1]
-			m.MachineOUT(port)
-			s.PC += 2
-		} else {
-			s.Emulate8080Op(true)
-		}
-		if (time.Now().Nanosecond())-lastInterrupt.Nanosecond() > 16666666 { //1/60 second has elapsed
-			//only do an interrupt if they are enabled
-			if s.IntEnable == 1 {
-				s.generateInterrupt(2) //interrupt 2
-
-				//Save the time we did this
-				lastInterrupt = time.Now()
-			}
-		}
-
+		s.Step()
 	}
 }
 func (s *State8080) Emulate8080Op(dasm bool) {
