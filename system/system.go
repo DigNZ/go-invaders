@@ -16,7 +16,11 @@ func (s *System) drawScreen() {
 
 		for i := 0; i < 8; i++ {
 			if (b & 0x1) != 0 {
-				rl.DrawRectangle(y*3, (256-x)*3, 3, 3, rl.White)
+				color := rl.White
+				if (256-x)*3 > 512 {
+					color = rl.Green
+				}
+				rl.DrawRectangle(y*3, (256-x)*3, 3, 3, color)
 			}
 			b = b >> 1
 			x++
@@ -70,7 +74,7 @@ func (s *System) updateInput() {
 	}
 }
 func (s *System) Start() {
-	cycles := 2000000 / 60
+	cycles := 33334
 	rl.InitWindow(448+224, 512+256, "Go Invaders")
 	rl.SetTargetFPS(60)
 	for !rl.WindowShouldClose() {

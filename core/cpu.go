@@ -144,8 +144,10 @@ func (s *State8080) Init(m *Machine) {
 }
 func (s *State8080) Step(cycles int) {
 	cycleCount := 0
+	//start := time.Now()
 	for {
 		if cycleCount >= cycles {
+			//	fmt.Printf("Cycles %d, Time %s, Cycles per second %f\n", cycleCount, time.Since(start), float32(cycleCount)/float32((time.Since(start).Seconds())))
 			return
 		}
 		opcode := s.Memory[s.PC]
@@ -162,7 +164,7 @@ func (s *State8080) Step(cycles int) {
 			s.Emulate8080Op(false)
 		}
 		//fmt.Printf("Time %d\n", time.Since(s.lastInterrupt).Milliseconds())
-		if time.Since(s.lastInterrupt).Milliseconds() > 16 { //1/60 second has elapsed
+		if time.Since(s.lastInterrupt).Milliseconds() > 8 { //1/60 second has elapsed
 			//only do an interrupt if they are enabled
 			if s.IntEnable == 1 {
 				if s.whichInterrupt == 1 {
