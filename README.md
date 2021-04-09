@@ -4,3 +4,4 @@
 
 Following details from http://emulator101.com/
 
+Uses Raylib via github.com/gen2brain/raylib-go/raylib

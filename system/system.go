@@ -16,7 +16,7 @@ func (s *System) drawScreen() {
 
 		for i := 0; i < 8; i++ {
 			if (b & 0x1) != 0 {
-				rl.DrawPixel(x, y, rl.White)
+				rl.DrawRectangle(y*3, (256-x)*3, 3, 3, rl.White)
 			}
 			b = b >> 1
 			x++
@@ -29,15 +29,19 @@ func (s *System) drawScreen() {
 
 	}
 }
+func (s *System) updateInput() {
+
+}
 func (s *System) Start() {
 	cycles := 2000000 / 60
-	rl.InitWindow(256, 244, "raylib [core] example - basic window")
-
+	rl.InitWindow(448+224, 512+256, "Go Invaders")
+	rl.SetTargetFPS(60)
 	for !rl.WindowShouldClose() {
 		s.Machine.Cpu.Step(cycles)
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.Black)
 		s.drawScreen()
+		s.updateInput()
 		rl.EndDrawing()
 	}
 	rl.CloseWindow()
