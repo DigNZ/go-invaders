@@ -12,7 +12,7 @@ const (
 )
 
 type Machine struct {
-	shift0, shift1, shift_offset, port1, port2 uint8
+	shift0, shift1, shift_offset, Port1, Port2 uint8
 	Cpu                                        *State8080
 }
 
@@ -27,6 +27,10 @@ func (m *Machine) MachineIN(port uint8) uint8 {
 	switch port {
 	case 0:
 		return 1
+	case 1:
+		return m.Port1
+	case 2:
+		return m.Port2
 	case 3:
 		v := (uint16(m.shift1) << 8) | uint16(m.shift0)
 		a = uint8((v >> (8 - m.shift_offset)) & 0xff)

@@ -347,7 +347,15 @@ func (s *State8080) Emulate8080Op(dasm bool) {
 		s.H = data[0]
 		s.PC++
 	case 0x27:
-		s.UnimplementedInstruction(opcode)
+		if (s.A & 0xf) > 9 {
+			s.A += 6
+		}
+		if (s.A & 0xf0) > 0x90 {
+			res := uint16(s.A) + 0x60
+			s.A = uint8(res & 0xff)
+			s.arithFlagsA(res)
+		}
+
 	case 0x28:
 		s.UnimplementedInstruction(opcode)
 	case 0x29:

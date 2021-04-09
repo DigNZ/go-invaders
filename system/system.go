@@ -30,7 +30,44 @@ func (s *System) drawScreen() {
 	}
 }
 func (s *System) updateInput() {
+	//keys down
+	if rl.IsKeyDown(rl.KeyC) {
+		s.Machine.Port1 |= 0x01
+	}
+	if rl.IsKeyDown(rl.KeyOne) {
+		s.Machine.Port1 |= 0b00000100
+	}
+	if rl.IsKeyDown(rl.KeyRight) {
+		s.Machine.Port1 |= 0b01000000
+	}
+	if rl.IsKeyDown(rl.KeyLeft) {
+		s.Machine.Port1 |= 0b00100000
+	}
+	if rl.IsKeyDown(rl.KeySpace) {
+		s.Machine.Port1 |= 0b00010000
+	}
 
+	//Keys up
+	if rl.IsKeyUp(rl.KeyC) {
+		var bit uint8 = 0x01
+		s.Machine.Port1 &= ^bit
+	}
+	if rl.IsKeyUp(rl.KeyOne) {
+		var bit uint8 = 0b00000100
+		s.Machine.Port1 &= ^bit
+	}
+	if rl.IsKeyUp(rl.KeyRight) {
+		var bit uint8 = 0b01000000
+		s.Machine.Port1 &= ^bit
+	}
+	if rl.IsKeyUp(rl.KeyLeft) {
+		var bit uint8 = 0b00100000
+		s.Machine.Port1 &= ^bit
+	}
+	if rl.IsKeyUp(rl.KeySpace) {
+		var bit uint8 = 0b00010000
+		s.Machine.Port1 &= ^bit
+	}
 }
 func (s *System) Start() {
 	cycles := 2000000 / 60
