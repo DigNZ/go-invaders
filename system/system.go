@@ -6,15 +6,14 @@ import (
 )
 
 type System struct {
-	Cpu *core.State8080
+	Machine *core.Machine
 }
 
 func (s *System) drawScreen() {
 	var x, y int32
-
 	for idx := 0x2400; idx < 0x3FFF; idx++ {
-		b := s.Cpu.Memory[idx]
-		//if b != 0 {
+		b := s.Machine.Cpu.Memory[idx]
+
 		for i := 0; i < 8; i++ {
 			if (b & 0x1) != 0 {
 				rl.DrawPixel(x, y, rl.White)
@@ -22,7 +21,6 @@ func (s *System) drawScreen() {
 			b = b >> 1
 			x++
 		}
-		//}
 
 		if x > 255 {
 			x = 0
@@ -32,10 +30,11 @@ func (s *System) drawScreen() {
 	}
 }
 func (s *System) Start() {
+	cycles := 2000000 / 60
 	rl.InitWindow(256, 244, "raylib [core] example - basic window")
-	s.Cpu.Init()
+
 	for !rl.WindowShouldClose() {
-		s.Cpu.Step()
+		s.Machine.Cpu.Step(cycles)
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.Black)
 		s.drawScreen()

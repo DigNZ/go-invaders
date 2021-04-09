@@ -4,9 +4,29 @@ import (
 	"fmt"
 	"os"
 	"time"
-
-	io "github.com/DigNZ/goinvaders/io"
 )
+
+var cycles8080 = [...]uint8{
+	4, 10, 7, 5, 5, 5, 7, 4, 4, 10, 7, 5, 5, 5, 7, 4, //0x00..0x0f
+	4, 10, 7, 5, 5, 5, 7, 4, 4, 10, 7, 5, 5, 5, 7, 4, //0x10..0x1f
+	4, 10, 16, 5, 5, 5, 7, 4, 4, 10, 16, 5, 5, 5, 7, 4, //etc
+	4, 10, 13, 5, 10, 10, 10, 4, 4, 10, 13, 5, 5, 5, 7, 4,
+
+	5, 5, 5, 5, 5, 5, 7, 5, 5, 5, 5, 5, 5, 5, 7, 5, //0x40..0x4f
+	5, 5, 5, 5, 5, 5, 7, 5, 5, 5, 5, 5, 5, 5, 7, 5,
+	5, 5, 5, 5, 5, 5, 7, 5, 5, 5, 5, 5, 5, 5, 7, 5,
+	7, 7, 7, 7, 7, 7, 7, 7, 5, 5, 5, 5, 5, 5, 7, 5,
+
+	4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4, //0x80..8x4f
+	4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
+	4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
+	4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
+
+	11, 10, 10, 10, 17, 11, 7, 11, 11, 10, 10, 10, 10, 17, 7, 11, //0xc0..0xcf
+	11, 10, 10, 10, 17, 11, 7, 11, 11, 10, 10, 10, 10, 17, 7, 11,
+	11, 10, 10, 18, 17, 11, 7, 11, 11, 5, 10, 5, 17, 17, 7, 11,
+	11, 10, 10, 4, 17, 11, 7, 11, 11, 5, 10, 4, 17, 17, 7, 11,
+}
 
 type ConditionCodes struct {
 	Z, S, P, CY, AC bool
@@ -18,8 +38,9 @@ type State8080 struct {
 	Memory              [0x10000]uint8
 	ConditionCodes      ConditionCodes
 	IntEnable           uint8
-	Machine             io.Machine
+	Machine             *Machine
 	lastInterrupt       time.Time
+	whichInterrupt      int
 }
 
 func (s *State8080) UnimplementedInstruction(opcode byte) {
@@ -114,39 +135,54 @@ func (s *State8080) generateInterrupt(interrupt_num uint16) {
 	//Set the PC to the low memory vector.
 	//This is identical to an "RST interrupt_num" instruction.
 	s.PC = 8 * interrupt_num
+	s.IntEnable = 0
 }
-func (s *State8080) Init() {
-	s.Machine = io.Machine{}
+func (s *State8080) Init(m *Machine) {
+	s.Machine = m
 	s.lastInterrupt = time.Now()
+	fmt.Println("INIT")
 }
-func (s *State8080) Step() {
-	opcode := s.Memory[s.PC]
-	if opcode == 0xdb {
-		port := s.Memory[s.PC+1]
-		s.A = s.Machine.MachineIN(port)
-		s.PC += 2
-	} else if opcode == 0xd3 {
-		port := s.Memory[s.PC+1]
-		s.Machine.MachineOUT(port, s.A)
-		s.PC += 2
-	} else {
-		s.Emulate8080Op(false)
-	}
-	if (time.Now().Nanosecond())-s.lastInterrupt.Nanosecond() > 16666666 { //1/60 second has elapsed
-		//only do an interrupt if they are enabled
-		if s.IntEnable == 1 {
-			fmt.Println("Interrupt")
-			s.generateInterrupt(2) //interrupt 2
+func (s *State8080) Step(cycles int) {
+	cycleCount := 0
+	for {
+		if cycleCount >= cycles {
+			return
+		}
+		opcode := s.Memory[s.PC]
+		cycleCount += int(cycles8080[opcode])
+		if opcode == 0xdb {
+			port := s.Memory[s.PC+1]
+			s.A = s.Machine.MachineIN(port)
+			s.PC += 2
+		} else if opcode == 0xd3 {
+			port := s.Memory[s.PC+1]
+			s.Machine.MachineOUT(port, s.A)
+			s.PC += 2
+		} else {
+			s.Emulate8080Op(false)
+		}
+		//fmt.Printf("Time %d\n", time.Since(s.lastInterrupt).Milliseconds())
+		if time.Since(s.lastInterrupt).Milliseconds() > 16 { //1/60 second has elapsed
+			//only do an interrupt if they are enabled
+			if s.IntEnable == 1 {
+				if s.whichInterrupt == 1 {
+					s.generateInterrupt(1)
+					s.whichInterrupt = 2
+				} else {
+					s.generateInterrupt(2)
+					s.whichInterrupt = 1
+				}
 
-			//Save the time we did this
-			s.lastInterrupt = time.Now()
+				//Save the time we did this
+				s.lastInterrupt = time.Now()
+			}
 		}
 	}
 }
 func (s *State8080) Run() {
 
 	for {
-		s.Step()
+		s.Step(1)
 	}
 }
 func (s *State8080) Emulate8080Op(dasm bool) {
@@ -1095,7 +1131,7 @@ func (s *State8080) Emulate8080Op(dasm bool) {
 			s.PC += 2
 		}
 	case 0xf3:
-		s.UnimplementedInstruction(opcode)
+		s.IntEnable = 0
 	case 0xf4:
 		if !s.ConditionCodes.S {
 			ret := s.PC + 2

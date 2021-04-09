@@ -49,17 +49,18 @@ func main() {
 			pc += core.Disassemble8080Op(buffer, pc)
 		}
 	} else {
-		s := core.State8080{}
+		m := core.Machine{}
+		m.Init()
 		if len(os.Args) > 2 {
 			addr, err := strconv.ParseInt(os.Args[2], 16, 16)
 			if err != nil {
 				panic(err)
 			}
-			s.InitWithDataAt(buffer, int(addr))
+			m.Cpu.InitWithDataAt(buffer, int(addr))
 		} else {
-			s.InitWithData(buffer)
+			m.Cpu.InitWithData(buffer)
 		}
-		system := system.System{Cpu: &s}
+		system := system.System{Machine: &m}
 		system.Start()
 	}
 
