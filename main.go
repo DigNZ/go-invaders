@@ -50,7 +50,7 @@ func main() {
 		}
 	} else {
 		m := core.Machine{}
-		m.Init()
+		m.Init("rom/audio")
 		if len(os.Args) > 2 {
 			addr, err := strconv.ParseInt(os.Args[2], 16, 16)
 			if err != nil {

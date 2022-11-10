@@ -160,6 +160,7 @@ func (s *State8080) Step(cycles int) {
 			port := s.Memory[s.PC+1]
 			s.Machine.MachineOUT(port, s.A)
 			s.PC += 2
+			s.Machine.PlaySound()
 		} else {
 			s.Emulate8080Op(false)
 		}

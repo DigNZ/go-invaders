@@ -73,9 +73,11 @@ func (s *System) updateInput() {
 		s.Machine.Port1 &= ^bit
 	}
 }
+
 func (s *System) Start() {
 	cycles := 33334
 	rl.InitWindow(448+224, 512+256, "Go Invaders")
+	rl.InitAudioDevice()
 	rl.SetTargetFPS(60)
 	for !rl.WindowShouldClose() {
 		s.Machine.Cpu.Step(cycles)
